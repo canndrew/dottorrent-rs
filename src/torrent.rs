@@ -8,12 +8,22 @@ use bencode::{ByteString, Number, List, Dict};
 
 use hash::Sha1Hash;
 
+/// A torrent.
 #[deriving(Show)]
 pub struct Torrent {
+  /// A list of tracker URLs, divided into tiers as per bittorrent 
+  /// [BEP 12](http://www.bittorrent.org/beps/bep_0012.html).
   pub trackers: Vec<Vec<String>>,
+  /// A list of peers that may be seeding this torrent. Peers are in the form
+  /// `(hostname, port)`. For example `[("1.2.3.4", 1000), ("foo.org", 1001)]`.
+  pub nodes: Vec<(String, u16)>,
+  /// The length of a piece in bytes.
   pub piece_length: uint,
+  /// The hashes of the individual torrent pieces.
   pub pieces: Vec<Sha1Hash>,
+  /// The root file or directory name of the torrent.
   pub filename: String,
+  /// The directory structure of the torrent.
   pub contents: TorrentDirTreeNode,
 }
 
@@ -81,6 +91,30 @@ impl FromBencode for Torrent {
       },
     };
 
+    let nodes: Vec<(String, u16)> = match hm.get(&bencode::util::ByteString::from_str("nodes")) {
+      Some(nl_be) => {
+        let nl = try_case!(List, nl_be);
+        let mut nodes: Vec<(String, u16)> = Vec::new();
+        for n_be in nl.iter() {
+          let n = try_case!(List, n_be);
+          let mut niter = n.iter();
+          match (niter.next(), niter.next(), niter.next()) {
+            (Some(addr_be), Some(port_be), None) => {
+              let addr = match String::from_utf8(try_case!(ByteString, addr_be).clone()) {
+                Ok(ss)  => ss,
+                Err(_)  => return None,
+              };
+              let port = try_opt!(try_case!(Number, port_be).to_u16());
+              nodes.push((addr, port));
+            },
+            _ => return None,
+          }
+        };
+        nodes
+      },
+      None    => Vec::new(),
+    };
+
     let info = match hm.get(&bencode::util::ByteString::from_str("info")) {
       Some(i) => try_case!(Dict, i),
       None    => hm,
@@ -114,6 +148,7 @@ impl FromBencode for Torrent {
         let length = try_opt!(try_case!(Number, l).to_uint());
         Some(Torrent {
           trackers:     trackers,
+          nodes:        nodes,
           piece_length: piece_length,
           pieces:       pieces_vec,
           filename:     name,
@@ -171,6 +206,7 @@ impl FromBencode for Torrent {
         };
         Some(Torrent {
           trackers:     trackers,
+          nodes:        nodes,
           piece_length: piece_length,
           pieces:       pieces_vec,
           filename:     name,
