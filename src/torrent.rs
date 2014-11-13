@@ -25,10 +25,15 @@ pub struct Torrent {
   /// (GetRight-style). See
   /// [BEP 19](http://www.bittorrent.org/beps/bep_0019.html) for more info.
   pub urllist: Option<String>,
+  /// Is this a private torrent?
+  pub private: bool,
   /// The length of a piece in bytes.
   pub piece_length: uint,
   /// The hashes of the individual torrent pieces.
   pub pieces: Vec<Sha1Hash>,
+  /// The root of the Merkle hash of the torrent. See
+  /// [BEP 30](http://www.bittorrent.org/beps/bep_0030.html) for more info.
+  pub merkle_root: Option<Sha1Hash>,
   /// The root file or directory name of the torrent.
   pub filename: String,
   /// The directory structure of the torrent.
@@ -152,6 +157,22 @@ impl FromBencode for Torrent {
       None    => hm,
     };
 
+    let merkle_root = match info.get(&bencode::util::ByteString::from_str("root hash")) {
+      Some(mr_be) => {
+        let mr = try_case!(ByteString, mr_be);
+        Some(try_opt!(Sha1Hash::from_buffer(mr.as_slice())))
+      },
+      None  => None,
+    };
+
+    let private = match info.get(&bencode::util::ByteString::from_str("private")) {
+      Some(p_be)  => {
+        let p = try_case!(Number, p_be);
+        *p != 0
+      },
+      None => false,
+    };
+
     let name = match String::from_utf8(try_case!(ByteString,
           try_opt!(info.get(&bencode::util::ByteString::from_str("name")))).clone()) {
       Ok(ss)  => ss,
@@ -183,8 +204,10 @@ impl FromBencode for Torrent {
           nodes:        nodes,
           httpseeds:    httpseeds,
           urllist:      urllist,
+          private:      private,
           piece_length: piece_length,
           pieces:       pieces_vec,
+          merkle_root:  merkle_root,
           filename:     name,
           contents:     FileNode(length),
         })
@@ -243,8 +266,10 @@ impl FromBencode for Torrent {
           nodes:        nodes,
           httpseeds:    httpseeds,
           urllist:      urllist,
+          private:      private,
           piece_length: piece_length,
           pieces:       pieces_vec,
+          merkle_root:  merkle_root,
           filename:     name,
           contents:     DirNode(filetree),
         })
