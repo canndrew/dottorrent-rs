@@ -17,6 +17,8 @@ pub struct Torrent {
   /// A list of peers that may be seeding this torrent. Peers are in the form
   /// `(hostname, port)`. For example `[("1.2.3.4", 1000), ("foo.org", 1001)]`.
   pub nodes: Vec<(String, u16)>,
+  /// A list of locations where the file(s) can be downloaded from over http.
+  pub httpseeds: Vec<String>,
   /// The length of a piece in bytes.
   pub piece_length: uint,
   /// The hashes of the individual torrent pieces.
@@ -115,6 +117,22 @@ impl FromBencode for Torrent {
       None    => Vec::new(),
     };
 
+    let httpseeds: Vec<String> = match hm.get(&bencode::util::ByteString::from_str("httpseeds")) {
+      Some(hl_be) => {
+        let hl = try_case!(List, hl_be);
+        let mut httpseeds: Vec<String> = Vec::new();
+        for h_be in hl.iter() {
+          let h = match String::from_utf8(try_case!(ByteString, h_be).clone()) {
+            Ok(ss)  => ss,
+            Err(_)  => return None,
+          };
+          httpseeds.push(h);
+        };
+        httpseeds
+      },
+      None  => Vec::new(),
+    };
+
     let info = match hm.get(&bencode::util::ByteString::from_str("info")) {
       Some(i) => try_case!(Dict, i),
       None    => hm,
@@ -149,6 +167,7 @@ impl FromBencode for Torrent {
         Some(Torrent {
           trackers:     trackers,
           nodes:        nodes,
+          httpseeds:    httpseeds,
           piece_length: piece_length,
           pieces:       pieces_vec,
           filename:     name,
@@ -207,6 +226,7 @@ impl FromBencode for Torrent {
         Some(Torrent {
           trackers:     trackers,
           nodes:        nodes,
+          httpseeds:    httpseeds,
           piece_length: piece_length,
           pieces:       pieces_vec,
           filename:     name,
