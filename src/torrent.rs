@@ -18,9 +18,14 @@ pub struct Torrent {
   pub contents: TorrentDirTreeNode,
 }
 
+/// A node in a directory structure.
 #[deriving(Show)]
 pub enum TorrentDirTreeNode {
+  /// A file node in a directory structure. `FileNode(n)` represents a file of
+  /// size `n`.
   FileNode(uint),
+  /// A directory node in a directory structure. A map of filenames to
+  /// directories and/or files.
   DirNode(TreeMap<String, TorrentDirTreeNode>),
 }
 
@@ -97,17 +102,9 @@ impl FromBencode for Torrent {
       if remaining.len() < 20 {
         return None;
       }
-      let this = remaining[.. 20];
+      pieces_vec.push(Sha1Hash::from_buffer(remaining[.. 20]).unwrap());
       remaining = remaining[20 ..];
 
-      let mut thishash: [u8, ..20] = unsafe { uninitialized() };
-      for (d, s) in thishash.iter_mut().zip(this.iter()) {
-        *d = *s;
-      }
-
-      pieces_vec.push(Sha1Hash {
-        hash: thishash,
-      });
       if remaining.len() == 0 {
         break;
       }
@@ -186,6 +183,8 @@ impl FromBencode for Torrent {
 }
 
 impl Torrent {
+  /// Load a torrent from a file. Returns None if the torrent file is malformed,
+  /// or then was an error reading the file.
   pub fn load_file(path: &Path) -> Option<Torrent> {
     let mut f = File::open(path);
     let data = match f.read_to_end() {
@@ -195,6 +194,7 @@ impl Torrent {
     Torrent::from_buffer(data.as_slice())
   }
 
+  /// Load a torrent from a slice of bencoded data.
   pub fn from_buffer(s: &[u8]) -> Option<Torrent> {
     let ben = match bencode::from_buffer(s) {
       Ok(d)   => d,
