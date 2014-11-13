@@ -1,4 +1,5 @@
 use std::fmt::{mod, Show, Formatter};
+use std::mem::uninitialized;
 
 pub struct Sha1Hash {
   pub hash: [u8, ..20],
@@ -11,7 +12,7 @@ impl Sha1Hash {
     match s.len() == 20 {
       true  => {
         let mut hash: [u8, ..20] = unsafe { uninitialized() };
-        for (d, s) in hash.iter().zip(s.iter()) {
+        for (d, s) in hash.iter_mut().zip(s.iter()) {
           *d = *s;
         };
         Some(Sha1Hash {

@@ -1,7 +1,6 @@
 use std::vec::Vec;
 use std::io::File;
 use std::path::Path;
-use std::mem::uninitialized;
 use std::collections::TreeMap;
 
 use bencode::{mod, Bencode, FromBencode};
