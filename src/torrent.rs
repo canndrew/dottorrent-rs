@@ -2,9 +2,11 @@ use std::vec::Vec;
 use std::io::File;
 use std::path::Path;
 use std::collections::TreeMap;
+use std::str::from_utf8;
 
 use bencode::{mod, Bencode, FromBencode};
 use bencode::{ByteString, Number, List, Dict};
+use url::{Url, Host};
 
 use hash::Sha1Hash;
 
@@ -13,18 +15,18 @@ use hash::Sha1Hash;
 pub struct Torrent {
   /// A list of tracker URLs, divided into tiers as per bittorrent 
   /// [BEP 12](http://www.bittorrent.org/beps/bep_0012.html).
-  pub trackers: Vec<Vec<String>>,
+  pub trackers: Vec<Vec<Url>>,
   /// A list of peers that may be seeding this torrent. Peers are in the form
-  /// `(hostname, port)`. For example `[("1.2.3.4", 1000), ("foo.org", 1001)]`.
-  pub nodes: Vec<(String, u16)>,
+  /// `(host, port)`. For example `[(1.2.3.4, 1000), (foo.org, 1001)]`.
+  pub nodes: Vec<(Host, u16)>,
   /// A list of locations where the file(s) can be downloaded from over http.
   /// This is for HTTP seeding (Hoffman-style). See
   /// [BEP 17](http://www.bittorrent.org/beps/bep_0017.html) for more info.
-  pub httpseeds: Vec<String>,
+  pub httpseeds: Vec<Url>,
   /// A url where the file(s) can be downloaded. This is for HTTP/FTP seeding
   /// (GetRight-style). See
   /// [BEP 19](http://www.bittorrent.org/beps/bep_0019.html) for more info.
-  pub urllist: Option<String>,
+  pub urllist: Option<Url>,
   /// Is this a private torrent?
   pub private: bool,
   /// The length of a piece in bytes.
@@ -64,13 +66,13 @@ impl FromBencode for Torrent {
     let announce_list = match hm.get(&bencode::util::ByteString::from_str("announce-list")) {
       Some(a) => {
         let al = try_case!(List, a);
-        let mut tiers_vec: Vec<Vec<String>> = Vec::new();
+        let mut tiers_vec: Vec<Vec<Url>> = Vec::new();
         for tier in al.iter() {
           let t = try_case!(List, tier);
-          let mut tier_vec: Vec<String> = Vec::new();
+          let mut tier_vec: Vec<Url> = Vec::new();
           for tracker in t.iter() {
             let u = try_case!(ByteString, tracker);
-            match String::from_utf8(u.clone()) {
+            match Url::parse(try_opt!(from_utf8(u[]))) {
               Ok(ss)  => tier_vec.push(ss),
               Err(_)  => return None,
             };
@@ -83,7 +85,7 @@ impl FromBencode for Torrent {
     };
 
     let announce = match hm.get(&bencode::util::ByteString::from_str("announce")) {
-      Some(a) => match String::from_utf8(try_case!(ByteString, a).clone()) {
+      Some(a) => match Url::parse(try_opt!(from_utf8(try_case!(ByteString, a)[]))) {
         Ok(ss)  => Some(ss),
         Err(_)  => return None,
       },
@@ -94,8 +96,8 @@ impl FromBencode for Torrent {
       Some(al)  => al,
       None      => match announce {
         Some(s) => {
-          let mut t: Vec<String> = Vec::new();
-          let mut u: Vec<Vec<String>> = Vec::new();
+          let mut t: Vec<Url> = Vec::new();
+          let mut u: Vec<Vec<Url>> = Vec::new();
           t.push(s);
           u.push(t);
           u
@@ -104,16 +106,16 @@ impl FromBencode for Torrent {
       },
     };
 
-    let nodes: Vec<(String, u16)> = match hm.get(&bencode::util::ByteString::from_str("nodes")) {
+    let nodes: Vec<(Host, u16)> = match hm.get(&bencode::util::ByteString::from_str("nodes")) {
       Some(nl_be) => {
         let nl = try_case!(List, nl_be);
-        let mut nodes: Vec<(String, u16)> = Vec::new();
+        let mut nodes: Vec<(Host, u16)> = Vec::new();
         for n_be in nl.iter() {
           let n = try_case!(List, n_be);
           let mut niter = n.iter();
           match (niter.next(), niter.next(), niter.next()) {
             (Some(addr_be), Some(port_be), None) => {
-              let addr = match String::from_utf8(try_case!(ByteString, addr_be).clone()) {
+              let addr = match Host::parse(try_opt!(from_utf8(try_case!(ByteString, addr_be)[]))) {
                 Ok(ss)  => ss,
                 Err(_)  => return None,
               };
@@ -128,20 +130,20 @@ impl FromBencode for Torrent {
       None    => Vec::new(),
     };
 
-    let urllist: Option<String> = match hm.get(&bencode::util::ByteString::from_str("url-list")) {
-      Some(ul_be) => match String::from_utf8(try_case!(ByteString, ul_be).clone()) {
+    let urllist: Option<Url> = match hm.get(&bencode::util::ByteString::from_str("url-list")) {
+      Some(ul_be) => match Url::parse(try_opt!(from_utf8(try_case!(ByteString, ul_be)[]))) {
         Ok(ul)  => Some(ul),
         Err(_)  => return None,
       },
       None        => None,
     };
 
-    let httpseeds: Vec<String> = match hm.get(&bencode::util::ByteString::from_str("httpseeds")) {
+    let httpseeds: Vec<Url> = match hm.get(&bencode::util::ByteString::from_str("httpseeds")) {
       Some(hl_be) => {
         let hl = try_case!(List, hl_be);
-        let mut httpseeds: Vec<String> = Vec::new();
+        let mut httpseeds: Vec<Url> = Vec::new();
         for h_be in hl.iter() {
-          let h = match String::from_utf8(try_case!(ByteString, h_be).clone()) {
+          let h = match Url::parse(try_opt!(from_utf8(try_case!(ByteString, h_be)[]))) {
             Ok(ss)  => ss,
             Err(_)  => return None,
           };

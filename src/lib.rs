@@ -27,6 +27,7 @@
 #![feature(advanced_slice_patterns)]
 
 extern crate bencode;
+extern crate url;
 
 pub use torrent::{Torrent, TorrentDirTreeNode};
 pub use hash::Sha1Hash;
