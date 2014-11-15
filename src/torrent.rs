@@ -57,15 +57,11 @@ pub enum TorrentDirTreeNode {
 
 impl FromBencode for Torrent {
   fn from_bencode(bencode: &Bencode) -> Option<Torrent> {
-    /* TODO: clean up all this util::ByteString::from_str stuff when TreeMap
-     * gets a get_equiv method.
-     *
-     * There's quite a bit of unnecesary string copying that could be avoided
-     * with better TreeMap and bencode APIs.
-     */
+    macro_rules! key(($s:expr) => (|bs| bs.as_slice().cmp($s.as_bytes())))
+
     let hm = try_case!(Dict, bencode);
 
-    let announce_list = match hm.get(&bencode::util::ByteString::from_str("announce-list")) {
+    let announce_list = match hm.find_with(key!("announce-list")) {
       Some(a) => {
         let al = try_case!(List, a);
         let mut tiers_vec: Vec<Vec<Url>> = Vec::new();
@@ -86,7 +82,7 @@ impl FromBencode for Torrent {
       None    => None,
     };
 
-    let announce = match hm.get(&bencode::util::ByteString::from_str("announce")) {
+    let announce = match hm.find_with(key!("announce")) {
       Some(a) => match Url::parse(try_opt!(from_utf8(try_case!(ByteString, a)[]))) {
         Ok(ss)  => Some(ss),
         Err(_)  => return None,
@@ -108,7 +104,7 @@ impl FromBencode for Torrent {
       },
     };
 
-    let nodes: Vec<(Host, u16)> = match hm.get(&bencode::util::ByteString::from_str("nodes")) {
+    let nodes: Vec<(Host, u16)> = match hm.find_with(key!("nodes")) {
       Some(nl_be) => {
         let nl = try_case!(List, nl_be);
         let mut nodes: Vec<(Host, u16)> = Vec::new();
@@ -132,7 +128,7 @@ impl FromBencode for Torrent {
       None    => Vec::new(),
     };
 
-    let urllist: Option<Url> = match hm.get(&bencode::util::ByteString::from_str("url-list")) {
+    let urllist: Option<Url> = match hm.find_with(key!("url-list")) {
       Some(ul_be) => match Url::parse(try_opt!(from_utf8(try_case!(ByteString, ul_be)[]))) {
         Ok(ul)  => Some(ul),
         Err(_)  => return None,
@@ -140,7 +136,7 @@ impl FromBencode for Torrent {
       None        => None,
     };
 
-    let httpseeds: Vec<Url> = match hm.get(&bencode::util::ByteString::from_str("httpseeds")) {
+    let httpseeds: Vec<Url> = match hm.find_with(key!("httpseeds")) {
       Some(hl_be) => {
         let hl = try_case!(List, hl_be);
         let mut httpseeds: Vec<Url> = Vec::new();
@@ -156,12 +152,12 @@ impl FromBencode for Torrent {
       None  => Vec::new(),
     };
 
-    let info = match hm.get(&bencode::util::ByteString::from_str("info")) {
+    let info = match hm.find_with(key!("info")) {
       Some(i) => try_case!(Dict, i),
       None    => hm,
     };
 
-    let merkle_root = match info.get(&bencode::util::ByteString::from_str("root hash")) {
+    let merkle_root = match info.find_with(key!("root hash")) {
       Some(mr_be) => {
         let mr = try_case!(ByteString, mr_be);
         Some(try_opt!(Sha1Hash::from_buffer(mr.as_slice())))
@@ -169,7 +165,7 @@ impl FromBencode for Torrent {
       None  => None,
     };
 
-    let private = match info.get(&bencode::util::ByteString::from_str("private")) {
+    let private = match info.find_with(key!("private")) {
       Some(p_be)  => {
         let p = try_case!(Number, p_be);
         *p != 0
@@ -178,12 +174,12 @@ impl FromBencode for Torrent {
     };
 
     let name = match String::from_utf8(try_case!(ByteString,
-          try_opt!(info.get(&bencode::util::ByteString::from_str("name")))).clone()) {
+          try_opt!(info.find_with(key!("name")))).clone()) {
       Ok(ss)  => ss,
       Err(_)  => return None,
     };
-    let piece_length = try_opt!(try_case!(Number, try_opt!(info.get(&bencode::util::ByteString::from_str("piece length")))).to_uint());
-    let pieces = try_case!(ByteString, try_opt!(info.get(&bencode::util::ByteString::from_str("pieces"))));
+    let piece_length = try_opt!(try_case!(Number, try_opt!(info.find_with(key!("piece length")))).to_uint());
+    let pieces = try_case!(ByteString, try_opt!(info.find_with(key!("pieces"))));
 
     let mut pieces_vec: Vec<Sha1Hash> = Vec::new();
     let mut remaining = pieces[];
@@ -200,7 +196,7 @@ impl FromBencode for Torrent {
       }
     }
     
-    match info.get(&bencode::util::ByteString::from_str("length")) {
+    match info.find_with(key!("length")) {
       Some(l) => {
         let length = try_opt!(try_case!(Number, l).to_uint());
         Some(Torrent {
@@ -217,12 +213,12 @@ impl FromBencode for Torrent {
         })
       },
       None    => {
-        let files = try_case!(List, try_opt!(info.get(&bencode::util::ByteString::from_str("files"))));
+        let files = try_case!(List, try_opt!(info.find_with(key!("files"))));
         let mut filetree: TreeMap<String, TorrentDirTreeNode> = TreeMap::new();
         for fileinfo_be in files.iter() {
           let fileinfo = try_case!(Dict, fileinfo_be);
-          let length = try_opt!(try_case!(Number, try_opt!(fileinfo.get(&bencode::util::ByteString::from_str("length")))).to_uint());
-          let path = try_case!(List, try_opt!(fileinfo.get(&bencode::util::ByteString::from_str("path")))).as_slice();
+          let length = try_opt!(try_case!(Number, try_opt!(fileinfo.find_with(key!("length")))).to_uint());
+          let path = try_case!(List, try_opt!(fileinfo.find_with(key!("path")))).as_slice();
           match path {
             [dirlist.., ref fname_be]  => {
               fn getdir<'a>(dir: &'a mut TreeMap<String, TorrentDirTreeNode>, dl: &[Bencode]) -> Option<&'a mut TreeMap<String, TorrentDirTreeNode>> {
