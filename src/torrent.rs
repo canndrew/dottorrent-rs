@@ -10,6 +10,8 @@ use url::{Url, Host};
 
 use hash::Sha1Hash;
 
+use self::TorrentDirTreeNode::{FileNode, DirNode};
+
 /// A torrent.
 #[deriving(Show)]
 pub struct Torrent {
