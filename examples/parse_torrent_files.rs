@@ -1,21 +1,22 @@
 extern crate dottorrent;
 
-use std::os;
+use std::env;
+use std::path::Path;
 use dottorrent::Torrent;
 
 fn main() {
-  let args = os::args();
-  for file in args.slice_from(1).iter() {
+  let args: Vec<String> = env::args().collect();
+  for file in args[1 ..].iter() {
     println!("## {}", file);
     println!("");
-    let p = Path::new(file.as_slice());
+    let p = Path::new(&file[..]);
     match Torrent::load_file(&p) {
-      Some(t) => {
-        println!("trackers: {}", t.trackers);
+      Ok(t)  => {
+        println!("trackers: {:?}", t.trackers);
         println!("filename: {}", t.filename);
-        println!("everything: {}", t);
+        println!("everything: {:?}", t);
       },
-      None    => println!("Missing file or malformed torrent"),
+      Err(e) => println!("Error: {:?}", e),
     };
     println!("");
     println!("");
