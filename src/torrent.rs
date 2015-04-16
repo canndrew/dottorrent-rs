@@ -14,8 +14,6 @@ use hash::{Sha1Hash, InvalidHashLength};
 
 use self::TorrentDirTreeNode::{FileNode, DirNode};
 
-use self::TorrentDirTreeNode::{FileNode, DirNode};
-
 /// A torrent.
 #[derive(Debug)]
 pub struct Torrent {
